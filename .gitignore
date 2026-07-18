@@ -1,0 +1,12 @@
+# Runtime artifacts (downloaded media, transcripts, run packets)
+outputs/
+
+# Personal clippings, not part of the project
+wiki/
+
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
