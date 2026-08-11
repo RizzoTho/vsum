@@ -43,11 +43,12 @@ Output locations and models are configurable via CLI flags or environment variab
 | Setting | Flag | Env var | Default |
 |---|---|---|---|
 | Raw outputs (transcript, packet, media) | `--out-dir` | `VSUM_OUT_ROOT` | `./outputs/vsum/` |
-| Readable Markdown output | `--readable-out-dir` | `VSUM_READABLE_ROOT` | same dir as raw outputs |
+| Readable Markdown output | `--readable-out-dir` | `VSUM_READABLE_ROOT` | `<workspace>/wiki/Clippings/` |
+| Intermediate media temp dir | `--tmp-dir` | `VSUM_TMP_DIR` | system temp dir, cleaned after each run |
 | Whisper model for local ASR | `--whisper-model` | `VSUM_WHISPER_MODEL` | `small` |
 | Model for readable cleanup | `--readable-model` | `VSUM_READABLE_MODEL` | `gpt-4.1-mini` |
 
-By default the readable Markdown sits next to the raw transcript. If you keep readable transcripts in a note vault (I do), point `VSUM_READABLE_ROOT` at that folder once and every run lands there.
+Readable output is a blog-style structured article and lands in the current workspace's `wiki/Clippings/` by default, matching a note vault that keeps one clipping per video. Point `VSUM_READABLE_ROOT` elsewhere once if you want a different vault. Intermediate media (downloaded video, extracted audio, ASR output) is written to a global temp dir and removed after each run, so the workspace never accumulates large media files; `--keep-media` keeps them for debugging.
 
 ## Layout
 

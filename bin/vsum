@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -22,10 +23,20 @@ from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_OUT_ROOT = Path(os.environ.get("VSUM_OUT_ROOT", Path.cwd() / "outputs" / "vsum"))
-# Readable output defaults to the per-run source dir; VSUM_READABLE_ROOT or
-# --readable-out-dir redirect it to a fixed location such as a note vault.
-_readable_root_env = os.environ.get("VSUM_READABLE_ROOT")
-DEFAULT_READABLE_ROOT = Path(_readable_root_env) if _readable_root_env else None
+# Readable output defaults to the current workspace's wiki/Clippings/ vault.
+# VSUM_READABLE_ROOT or --readable-out-dir redirect it elsewhere.
+def default_readable_root() -> Path:
+    env = os.environ.get("VSUM_READABLE_ROOT")
+    root = Path(env) if env else Path.cwd() / "wiki" / "Clippings"
+    if len(root.parts) >= 2 and root.parts[-2:][0].lower() == "wiki" and root.parts[-1].lower() == "clippings":
+        root = root.parent / "Clippings"
+    return root
+
+DEFAULT_READABLE_ROOT = default_readable_root()
+# Intermediate media (downloaded video, extracted audio, whisper output) lives
+# under a global temp root so the workspace never accumulates large files.
+# VSUM_TMP_DIR or --tmp-dir overrides it.
+DEFAULT_TMP_ROOT = Path(os.environ.get("VSUM_TMP_DIR", Path(tempfile.gettempdir()) / "vsum"))
 DEFAULT_WHISPER_MODEL = os.environ.get("VSUM_WHISPER_MODEL", "small")
 DEFAULT_READABLE_MODEL = os.environ.get("VSUM_READABLE_MODEL", "gpt-4.1-mini")
 SUBTITLE_LANG_PRIORITY = ("zh-Hans", "zh-CN", "zh-Hant", "zh-TW", "zh", "en-orig", "en")
@@ -341,8 +352,8 @@ def try_download_subtitles(
     return None
 
 
-def download_video(url: str, source_dir: Path, cookies_from_browser: str | None) -> Path:
-    existing = sorted(source_dir.glob("video.*"))
+def download_video(url: str, media_dir: Path, cookies_from_browser: str | None) -> Path:
+    existing = sorted(media_dir.glob("video.*"))
     if existing:
         log(f"video: using cached file {existing[0]} ({human_size(existing[0])})")
         return existing[0]
@@ -355,13 +366,13 @@ def download_video(url: str, source_dir: Path, cookies_from_browser: str | None)
         "--merge-output-format",
         "mp4",
         "-o",
-        str(source_dir / "video.%(ext)s"),
+        str(media_dir / "video.%(ext)s"),
     ]
     add_platform_args(cmd, platform_from_url(url))
     add_cookie_args(cmd, cookies_from_browser)
     cmd.append(url)
     run_command(cmd, capture=False)
-    created = sorted(source_dir.glob("video.*"))
+    created = sorted(media_dir.glob("video.*"))
     if not created:
         raise BriefError("yt-dlp finished but no video file was created")
     log(f"video: saved {created[0]} ({human_size(created[0])})")
@@ -376,8 +387,8 @@ def ensure_video_file(path: Path) -> Path:
     return resolved
 
 
-def extract_audio(video_file: Path, source_dir: Path) -> Path:
-    audio = source_dir / "audio.m4a"
+def extract_audio(video_file: Path, media_dir: Path) -> Path:
+    audio = media_dir / "audio.m4a"
     if audio.exists() and audio.stat().st_size > 0:
         log(f"audio: using cached file {audio} ({human_size(audio)})")
         return audio
@@ -412,7 +423,7 @@ def resolve_asr_provider(choice: str) -> str:
     return "none"
 
 
-def transcribe(audio_file: Path, source_dir: Path, provider: str, model: str) -> Path:
+def transcribe(audio_file: Path, media_dir: Path, provider: str, model: str) -> Path:
     provider = resolve_asr_provider(provider)
     if provider == "none":
         raise BriefError(
@@ -431,13 +442,13 @@ def transcribe(audio_file: Path, source_dir: Path, provider: str, model: str) ->
             "--output_format",
             "srt",
             "--output_dir",
-            str(source_dir),
+            str(media_dir),
         ]
         run_command(cmd, capture=False)
-        generated = source_dir / f"{audio_file.stem}.srt"
+        generated = media_dir / f"{audio_file.stem}.srt"
         if not generated.exists():
             raise BriefError("whisper finished but no transcript file was created")
-        dst = source_dir / "transcript.srt"
+        dst = media_dir / "transcript.srt"
         if generated.resolve() != dst.resolve():
             shutil.copyfile(generated, dst)
         log(f"asr: transcript saved {dst}")
@@ -656,6 +667,7 @@ def build_readable_markdown(
     uploader = str(metadata.get("uploader") or "")
     published = format_yt_date(str(metadata.get("upload_date") or ""))
     description = truncate_text(re.sub(r"\s+", " ", str(metadata.get("description") or "")).strip(), 240)
+    tags = clipping_tags(metadata)
     lines = [
         "---",
         f"title: {yaml_string(title)}",
@@ -666,7 +678,7 @@ def build_readable_markdown(
         f"created: {datetime.now().strftime('%Y-%m-%d')}",
         f"description: {yaml_string(description)}" if description else "description:",
         "tags:",
-        '  - "clippings"',
+        *[f'  - "{tag}"' for tag in tags],
         "---",
         "",
         f"# {title}",
@@ -674,6 +686,28 @@ def build_readable_markdown(
         readable_text.strip(),
     ]
     return "\n".join(lines).strip() + "\n"
+
+
+def clipping_tags(metadata: dict[str, Any]) -> list[str]:
+    """Frontmatter tags: the clippings owner plus cleaned source hashtags."""
+    tags = ["clippings"]
+    description = str(metadata.get("description") or "")
+    raw = set(metadata.get("tags") or [])
+    for match in re.findall(r"#([^\s#\[\]\uFF08\uFF09，。]+)", description):
+        raw.add(match.strip())
+    seen: set[str] = set()
+    for tag in sorted(raw):
+        cleaned = re.sub(r"[\[\]（()）#]+", "", tag).strip()
+        if not cleaned or len(cleaned) > 24:
+            continue
+        key = cleaned.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        tags.append(cleaned)
+        if len(tags) >= 6:
+            break
+    return tags
 
 
 def yaml_string(value: str) -> str:
@@ -750,8 +784,12 @@ def make_readable_transcript(
     log(f"readable: openai started model={model}, chunks={len(chunks)}")
     write_json(run_dir / "chunks.json", [{"index": idx + 1, "text": text} for idx, text in enumerate(chunks)])
     system = (
-        "你把视频转写整理成可直接阅读的中文稿。保留原意和关键信息，不做摘要，不扩写新事实。"
-        "修正明显 ASR 错字、断句、标点和段落。输出中不要包含时间戳。"
+        "你把视频转写整理成一篇博客样式的结构化中文文章，而不是逐字稿。"
+        "保留原意和关键信息，不做摘要，不扩写新事实。"
+        "修正明显 ASR 错字、断句、标点和段落。"
+        "按话题组织成小节：用 ## 或 ### 小标题，必要时用列表和引用块。"
+        "书面化表达，去掉口头语和重复，但不要丢失说话人的核心观点和例子。"
+        "输出中不要包含时间戳。不要输出总结段落，不要输出行动建议。"
     )
     readable_chunks: list[str] = []
     total = len(chunks)
@@ -761,11 +799,11 @@ def make_readable_transcript(
             f"User intent:\n{intent}\n\n"
             f"Video title: {metadata.get('title', '')}\n"
             f"Chunk {idx}/{total} transcript:\n{chunk}\n\n"
-            "请把这一段整理成中文可读转写稿：\n"
+            "请把这一段整理成博客样式的结构化中文文章：\n"
             "- 保留完整内容和说话顺序，不要压缩成摘要。\n"
             "- 修正标点、断句、明显口误和 ASR 错别字。\n"
-            "- 用自然段承载意思，小标题只在话题明显转换时使用。\n"
-            "- 直接回答、引用或原话可以保留为引用块。\n"
+            "- 按话题拆成小节，用 ## 或 ### 小标题；每个小节写自然段，必要时用列表或引用块。\n"
+            "- 这是第 {idx} 块，共 {total} 块：如果是第一块，开头给一句引出全文的引言；如果是后续块，直接继续小节，不要重复引言。\n"
             "- 不要写总结、不要写行动建议、不要添加转写中没有的信息。"
         )
         readable_chunks.append(openai_response(model, system, user))
@@ -825,6 +863,7 @@ def run_brief(args: argparse.Namespace) -> int:
     meta = dump_metadata(args.url, args.cookies_from_browser)
     safe = safe_metadata(meta, args.url)
     source_dir = source_dir_for(out_root, meta, args.url)
+    media_dir = args.tmp_dir / f"{platform_from_url(args.url)}-{stable_id(meta, args.url)}"
     run_dir = source_dir / "runs" / now_stamp()
     source_dir.mkdir(parents=True, exist_ok=True)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -835,6 +874,7 @@ def run_brief(args: argparse.Namespace) -> int:
     )
     log(f"output: source_dir={source_dir}")
     log(f"output: run_dir={run_dir}")
+    log(f"output: media_dir={media_dir}")
 
     write_json(source_dir / "metadata.json", safe)
     log(f"metadata: saved {source_dir / 'metadata.json'}")
@@ -865,18 +905,23 @@ def run_brief(args: argparse.Namespace) -> int:
 
     if transcript_path is None:
         log("transcript: unavailable before ASR")
+        media_dir.mkdir(parents=True, exist_ok=True)
         if args.video_file:
             video_file = ensure_video_file(args.video_file)
         elif args.download:
-            video_file = download_video(args.url, source_dir, args.cookies_from_browser)
+            video_file = download_video(args.url, media_dir, args.cookies_from_browser)
         else:
             raise BriefError(
                 "No transcript found. Add --video-file for a Downie download, pass --transcript, or use --download."
             )
-        audio_file = extract_audio(video_file, source_dir)
+        audio_file = extract_audio(video_file, media_dir)
         asr_provider = resolve_asr_provider(args.asr)
-        transcript_path = transcribe(audio_file, source_dir, args.asr, args.whisper_model)
+        transcript_path = transcribe(audio_file, media_dir, args.asr, args.whisper_model)
         transcript_source = f"asr:{asr_provider}"
+        transcript_srt = source_dir / "transcript.srt"
+        if transcript_path.resolve() != transcript_srt.resolve():
+            shutil.copyfile(transcript_path, transcript_srt)
+        transcript_path = transcript_srt
 
     transcript_text = transcript_to_text(transcript_path)
     transcript_txt = source_dir / "transcript.txt"
@@ -888,7 +933,7 @@ def run_brief(args: argparse.Namespace) -> int:
         intent=args.intent,
         metadata=safe,
         run_dir=run_dir,
-        readable_root=(args.readable_out_dir or source_dir).resolve(),
+        readable_root=(args.readable_out_dir or DEFAULT_READABLE_ROOT).resolve(),
         transcript_source=transcript_source,
         provider=args.readable,
         model=args.readable_model,
@@ -904,6 +949,7 @@ def run_brief(args: argparse.Namespace) -> int:
         "artifacts": {
             "source_dir": str(source_dir),
             "run_dir": str(run_dir),
+            "media_dir": str(media_dir) if media_dir.exists() else None,
             "metadata": str(source_dir / "metadata.json"),
             "transcript": str(transcript_path),
             "transcript_text": str(transcript_txt),
@@ -919,6 +965,7 @@ def run_brief(args: argparse.Namespace) -> int:
             "readable_model": args.readable_model if readable_provider == "openai" else None,
             "chunk_chars": args.chunk_chars,
             "overlap_chars": args.overlap_chars,
+            "tmp_dir": str(args.tmp_dir),
         },
     }
     packet["artifacts"] = {key: value for key, value in packet["artifacts"].items() if value}
@@ -928,6 +975,9 @@ def run_brief(args: argparse.Namespace) -> int:
     latest = source_dir / "latest-packet.json"
     write_json(latest, packet)
     log(f"packet: saved {packet_path}")
+    if not args.keep_media and media_dir.exists():
+        shutil.rmtree(media_dir, ignore_errors=True)
+        log(f"tmp: cleaned {media_dir}")
     log("run: finished")
 
     print(f"packet: {packet_path}")
@@ -964,7 +1014,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--readable-out-dir",
         type=Path,
         default=DEFAULT_READABLE_ROOT,
-        help="Where transcript-readable output lands. Defaults to the run's own output dir.",
+        help="Where transcript-readable output lands. Defaults to the workspace's wiki/Clippings/.",
+    )
+    run.add_argument(
+        "--tmp-dir",
+        type=Path,
+        default=DEFAULT_TMP_ROOT,
+        help="Where intermediate media (video, audio, ASR output) lives while processing. Defaults to the global system temp dir; cleaned after each run unless --keep-media.",
+    )
+    run.add_argument(
+        "--keep-media",
+        action="store_true",
+        help="Keep intermediate media in --tmp-dir after the run instead of cleaning it.",
     )
     run.add_argument("--asr", choices=["auto", "whisper", "none"], default="auto")
     run.add_argument(

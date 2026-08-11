@@ -43,11 +43,12 @@ vsum run "<url>" --intent "<目的>" --download          # 明确同意后才用
 | 设置项 | 参数 | 环境变量 | 默认值 |
 |---|---|---|---|
 | 原始产物（转写稿、packet、媒体） | `--out-dir` | `VSUM_OUT_ROOT` | `./outputs/vsum/` |
-| 可读版 Markdown 输出 | `--readable-out-dir` | `VSUM_READABLE_ROOT` | 与原始产物同目录 |
+| 可读版 Markdown 输出 | `--readable-out-dir` | `VSUM_READABLE_ROOT` | `<workspace>/wiki/Clippings/` |
+| 中间媒体临时目录 | `--tmp-dir` | `VSUM_TMP_DIR` | 系统临时目录，每次运行后清理 |
 | 本地 ASR 的 Whisper 模型 | `--whisper-model` | `VSUM_WHISPER_MODEL` | `small` |
 | 可读稿清理模型 | `--readable-model` | `VSUM_READABLE_MODEL` | `gpt-4.1-mini` |
 
-默认情况下可读版 Markdown 就放在原始转写稿旁边。如果你像我一样把可读稿收进笔记库，把 `VSUM_READABLE_ROOT` 指到那个目录一次，之后每次运行都会落到那里。
+可读版是博客样式的结构化文章，默认落在当前工作区的 `wiki/Clippings/`，符合「一个视频一条剪藏」的笔记库习惯。想换别的笔记库，把 `VSUM_READABLE_ROOT` 指过去一次即可。中间媒体（下载的视频、提取的音频、ASR 输出）写进全局临时目录，每次运行后自动清理，工作区不会堆积大文件；`--keep-media` 可保留中间文件用于调试。
 
 ## 目录结构
 
