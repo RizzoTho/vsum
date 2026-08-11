@@ -14,6 +14,7 @@ Three behavior changes from Riza's workflow feedback after processing a Xiaohong
 
 - OpenAI readable prompt now asks for a structured article: `##`/`###` topic sections, lists and blockquotes where useful, written prose, ASR typo fixes, no timestamps, no summary paragraph, no action advice. Chunked runs: the first chunk opens with a lead-in, later chunks continue sections without repeating the lead-in.
 - `basic` fallback still merges the transcript into paragraphs without restructuring; it cannot produce topic sections without a model.
+- `agent` mode writes no readable file; the executing agent turns the raw transcript into the blog-style article itself.
 - Frontmatter tags now keep `clippings` plus cleaned hashtags scraped from the source description (deduped, max 6 tags). Source `tags` metadata is merged in too.
 
 ### Clippings default

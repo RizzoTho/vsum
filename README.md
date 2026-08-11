@@ -48,7 +48,7 @@ Output locations and models are configurable via CLI flags or environment variab
 | Whisper model for local ASR | `--whisper-model` | `VSUM_WHISPER_MODEL` | `small` |
 | Model for readable cleanup | `--readable-model` | `VSUM_READABLE_MODEL` | `gpt-4.1-mini` |
 
-Readable output is a blog-style structured article and lands in the current workspace's `wiki/Clippings/` by default, matching a note vault that keeps one clipping per video. Point `VSUM_READABLE_ROOT` elsewhere once if you want a different vault. Intermediate media (downloaded video, extracted audio, ASR output) is written to a global temp dir and removed after each run, so the workspace never accumulates large media files; `--keep-media` keeps them for debugging.
+Readable output is a blog-style structured article and lands in the current workspace's `wiki/Clippings/` by default, matching a note vault that keeps one clipping per video. Point `VSUM_READABLE_ROOT` elsewhere once if you want a different vault. `--readable agent` writes no readable file and lets the executing agent turn the raw transcript into the blog-style article itself, which is useful when you want the agent's own writing rather than an API call. Intermediate media (downloaded video, extracted audio, ASR output) is written to a global temp dir and removed after each run, so the workspace never accumulates large media files; `--keep-media` keeps them for debugging.
 
 ## Layout
 

@@ -759,6 +759,9 @@ def make_readable_transcript(
     if provider == "none":
         log("readable: skipped")
         return None, provider
+    if provider == "agent":
+        log("readable: delegated to the executing agent, no file written")
+        return None, provider
     readable_input = remove_environment_cues(transcript_text)
     if not readable_input:
         raise BriefError("Readable cleanup removed all transcript text")
@@ -984,6 +987,8 @@ def run_brief(args: argparse.Namespace) -> int:
     print(f"transcript: {transcript_txt}")
     if readable_path:
         print(f"readable: {readable_path}")
+    elif readable_provider == "agent":
+        print("readable: agent (raw transcript ready; the executing agent writes the blog-style article)")
     else:
         print("readable: skipped")
     return 0
@@ -1030,9 +1035,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--asr", choices=["auto", "whisper", "none"], default="auto")
     run.add_argument(
         "--readable",
-        choices=["auto", "openai", "basic", "none"],
+        choices=["auto", "openai", "basic", "agent", "none"],
         default="auto",
-        help="Create transcript-readable.md. auto uses OpenAI when OPENAI_API_KEY is set, otherwise basic cleanup.",
+        help="Readable output. auto uses OpenAI when OPENAI_API_KEY is set, otherwise basic. agent writes nothing and lets the executing agent turn the raw transcript into a blog-style article itself.",
     )
     run.add_argument("--whisper-model", default=DEFAULT_WHISPER_MODEL)
     run.add_argument("--readable-model", default=DEFAULT_READABLE_MODEL, help="Model for OpenAI readable transcript cleanup.")

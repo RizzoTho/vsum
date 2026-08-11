@@ -36,7 +36,7 @@ vsum run "<url>" --intent "<purpose>" --cookies-from-browser chrome
 
 - `--asr auto|whisper|none`: `auto` uses Whisper when installed.
 - `--whisper-model`: defaults to `small`; first use may download the model.
-- `--readable auto|openai|basic|none`: `auto` uses OpenAI when credentials exist, otherwise basic cleanup. `openai` produces the blog-style structured article; `basic` merges paragraphs without restructuring.
+- `--readable auto|openai|basic|agent|none`: `auto` uses OpenAI when credentials exist, otherwise basic cleanup. `openai` produces the blog-style structured article; `basic` merges paragraphs without restructuring; `agent` writes no readable file and delegates the article to the executing agent.
 - `--chunk-chars`: OpenAI cleanup chunk size, default `8000`.
 - `--overlap-chars`: keep at `0` for transcript rewriting to avoid repeated paragraphs.
 - `--out-dir`: override the current workspace's `outputs/vsum/` root.
@@ -45,4 +45,4 @@ vsum run "<url>" --intent "<purpose>" --cookies-from-browser chrome
 - `--keep-media`: keep intermediate media after the run instead of cleaning it.
 - `--keep-raw-metadata`: debugging only; saves direct media URLs and other raw metadata.
 
-Use `--readable openai` for polished blog-style Chinese prose when credentials and model calls are acceptable. Use `basic` when local cleanup matters more than polish, and `none` when only raw transcript is requested.
+Use `--readable openai` for polished blog-style Chinese prose when credentials and model calls are acceptable. Use `--readable agent` to skip vsum's readable step and let the executing agent write the blog-style article from the raw transcript. Use `basic` when local cleanup matters more than polish, and `none` when only raw transcript is requested.

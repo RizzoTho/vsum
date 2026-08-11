@@ -48,7 +48,7 @@ vsum run "<url>" --intent "<目的>" --download          # 明确同意后才用
 | 本地 ASR 的 Whisper 模型 | `--whisper-model` | `VSUM_WHISPER_MODEL` | `small` |
 | 可读稿清理模型 | `--readable-model` | `VSUM_READABLE_MODEL` | `gpt-4.1-mini` |
 
-可读版是博客样式的结构化文章，默认落在当前工作区的 `wiki/Clippings/`，符合「一个视频一条剪藏」的笔记库习惯。想换别的笔记库，把 `VSUM_READABLE_ROOT` 指过去一次即可。中间媒体（下载的视频、提取的音频、ASR 输出）写进全局临时目录，每次运行后自动清理，工作区不会堆积大文件；`--keep-media` 可保留中间文件用于调试。
+可读版是博客样式的结构化文章，默认落在当前工作区的 `wiki/Clippings/`，符合「一个视频一条剪藏」的笔记库习惯。想换别的笔记库，把 `VSUM_READABLE_ROOT` 指过去一次即可。`--readable agent` 不写可读文件，把整理步骤交给执行 skill 的 agent 自己完成，适合想要 agent 亲自写而不是调 API 的场景。中间媒体（下载的视频、提取的音频、ASR 输出）写进全局临时目录，每次运行后自动清理，工作区不会堆积大文件；`--keep-media` 可保留中间文件用于调试。
 
 ## 目录结构
 

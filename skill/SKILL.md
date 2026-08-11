@@ -49,7 +49,7 @@ Read [Platform Playbook](references/platform-playbook.md) only when choosing pla
 
 ## Readable Output Style
 
-The readable Markdown is a blog-style article, not a verbatim transcript. With `--readable openai` the model structures the transcript into topic sections with `##` headings, lists, and blockquotes, fixes obvious ASR typos, and writes in a书面 style while keeping every core point and example. The `basic` fallback merges the transcript into paragraphs without restructuring. Frontmatter keeps `clippings` plus cleaned hashtags from the source description.
+The readable Markdown is a blog-style article, not a verbatim transcript. With `--readable openai` the model structures the transcript into topic sections with `##` headings, lists, and blockquotes, fixes obvious ASR typos, and writes in a书面 style while keeping every core point and example. The `basic` fallback merges the transcript into paragraphs without restructuring. With `--readable agent` vsum writes no readable file: the raw transcript is ready and the executing agent turns it into the blog-style article itself, following the style rules above. Frontmatter keeps `clippings` plus cleaned hashtags from the source description.
 
 ## Verification
 
@@ -61,4 +61,4 @@ test -s "<transcript-readable.md path>"
 python3 -m json.tool "<packet.json path>" >/dev/null
 ```
 
-Report the three printed paths. If `readable: skipped`, say only the raw transcript was produced.
+Report the three printed paths. If `readable: skipped`, say only the raw transcript was produced. If `readable: agent`, the raw transcript is ready and the agent itself writes the blog-style article.
