@@ -2,70 +2,94 @@
 
 中文说明: [README.zh.md](README.zh.md)
 
-For people who learn from video — Bilibili, YouTube, Xiaohongshu — and would rather read than scrub a timeline. Getting a clean, readable transcript out of a video URL is fiddly: every platform hides captions differently, ASR hallucinates on silence, and half the tools quietly download media you never asked for. `vsum` grew out of my own knowledge workflow, where the transcript — not the video file — is the artifact worth keeping. AI doesn't replace the judgment of what's worth reading; it just gets you to the readable text much faster.
+`vsum` is an agent skill that turns public videos from Bilibili, YouTube, and Xiaohongshu into local transcripts or illustrated articles. It prefers platform subtitles and can use local Whisper transcription when captions are unavailable.
 
-`vsum` turns one public video URL plus a reading intent into local transcript artifacts: a normalized raw transcript, a readable Markdown version, and a machine-readable run record. The pipeline is subtitle-first — it only touches media when platform captions don't exist, and only downloads when you explicitly allow it.
+Give your agent a video URL and a reading purpose. It collects materials, reads the transcript, inspects useful frames, and saves the article and images locally. [SKILL.md](SKILL.md) defines the workflow; the execution script and writing instructions ship with the skill.
 
-## Install
+## Install and initialize
 
-Requires Python 3.10+ and [yt-dlp](https://github.com/yt-dlp/yt-dlp) on PATH. Optional, enabled when present:
-
-- `ffmpeg` + `whisper` CLI — local ASR fallback when a platform has no captions
-- `OPENAI_API_KEY` — readable-transcript cleanup via the OpenAI API (otherwise a basic offline cleanup runs)
+Install the whole repository as `vsum` in your agent's configured skills directory. For example, if you manage skills in `~/.agents/skills/`:
 
 ```bash
-git clone <this-repo> && cd vsum
-ln -s "$PWD/bin/vsum" ~/.local/bin/vsum   # or add bin/ to PATH
+git clone https://github.com/RizzoTho/vsum.git ~/.agents/skills/vsum
 ```
 
-## Usage
+Have your agent load the installed `SKILL.md`, then ask:
 
-```bash
-# Read public metadata first, no download
-vsum probe "https://www.youtube.com/watch?v=..."
+> Initialize vsum and save articles in the current project's wiki/Clippings directory.
 
-# Build transcript artifacts; --intent states what you want from the video
-vsum run "https://www.bilibili.com/video/BV..." --intent "turn this into a readable Chinese transcript"
-```
+The agent checks dependencies and the output destination, runs initialization to create a local `.env` inside the skill installation, then verifies the configuration. Initialization never overwrites existing preferences.
 
-When no captions exist you can supply your own source instead of downloading:
+Requires Python 3.10+ and [yt-dlp](https://github.com/yt-dlp/yt-dlp) on PATH. Frame extraction needs `ffmpeg`; local transcription without subtitles also needs the `whisper` CLI. The agent helps address missing dependencies as needed.
 
-```bash
-vsum run "<url>" --intent "<purpose>" --transcript notes.srt
-vsum run "<url>" --intent "<purpose>" --video-file local.mp4
-vsum run "<url>" --intent "<purpose>" --download          # explicit opt-in to yt-dlp download
-```
+## Use
+
+From the project where you want to save the results, ask your agent:
+
+> Use vsum to turn this video into a Chinese article, focusing on the demo workflow and design tradeoffs: <video URL>
+
+> Extract this video's subtitles and keep the raw transcript only: <video URL>
+
+You can also supply a local video or an existing transcript. Video download is enabled by default for frame extraction; ask to skip it if you only need text. Metadata and subtitle retrieval can still use the network.
+
+## Outputs
+
+| File | Contents |
+|---|---|
+| `transcript.txt` | Normalized transcript, with rolling-caption overlap removed |
+| `segments.json` | Caption text and timestamps, available for SRT/VTT sources |
+| `packet.json` | Source metadata, artifact paths, and article task status |
+| `<title>.md` | Agent-written article, after completing the `--read` workflow |
+
+Article images are stored beside the article in the directory specified by the packet. Plain-text transcripts have no timing data.
 
 ## Configuration
 
-Output locations and models are configurable via CLI flags or environment variables:
+Installation preferences live in `.env` beside `SKILL.md`; see [.env.example](.env.example). Relative paths resolve from the calling task workspace. Use an absolute path for a fixed note vault.
 
-| Setting | Flag | Env var | Default |
-|---|---|---|---|
-| Raw outputs (transcript, packet, media) | `--out-dir` | `VSUM_OUT_ROOT` | `./outputs/vsum/` |
-| Readable Markdown output | `--readable-out-dir` | `VSUM_READABLE_ROOT` | `<workspace>/wiki/Clippings/` |
-| Intermediate media temp dir | `--tmp-dir` | `VSUM_TMP_DIR` | system temp dir, cleaned after each run |
-| Whisper model for local ASR | `--whisper-model` | `VSUM_WHISPER_MODEL` | `small` |
-| Model for readable cleanup | `--readable-model` | `VSUM_READABLE_MODEL` | `gpt-4.1-mini` |
+| Setting | Default |
+|---|---|
+| `VSUM_OUT_ROOT`: transcripts and run records | `outputs/vsum` |
+| `VSUM_READABLE_ROOT`: articles | `wiki/Clippings` |
+| `VSUM_TMP_DIR`: temporary media | `vsum` under the system temporary directory |
+| `VSUM_WHISPER_MODEL`: local transcription model | `small` |
 
-Readable output is a blog-style structured article and lands in the current workspace's `wiki/Clippings/` by default, matching a note vault that keeps one clipping per video. Point `VSUM_READABLE_ROOT` elsewhere once if you want a different vault. `--readable agent` writes no readable file and lets the executing agent turn the raw transcript into the blog-style article itself, which is useful when you want the agent's own writing rather than an API call. Intermediate media (downloaded video, extracted audio, ASR output) is written to a global temp dir and removed after each run, so the workspace never accumulates large media files; `--keep-media` keeps them for debugging.
+Run arguments override environment variables, which override `.env`; unspecified settings use defaults. Temporary media is cleaned after article finalization, or at the end of a materials-only run. Ask the agent to use `--keep-media` to retain it. User-supplied source videos are preserved.
+
+See [configuration](references/configuration.md) for the file format, preference updates, and dependency checks.
+
+## Run the script directly
+
+For manual use or troubleshooting, call the installed script from the task workspace:
+
+```bash
+python3 "<skill-dir>/scripts/vsum.py" doctor
+python3 "<skill-dir>/scripts/vsum.py" run "<url>" --read
+python3 "<skill-dir>/scripts/vsum.py" run --help
+```
+
+`--read` prepares a writing task; the agent writes and submits the article. See [SKILL.md](SKILL.md) for the full workflow and the [platform playbook](references/platform-playbook.md) for source-specific guidance.
 
 ## Layout
 
-```
-bin/      the vsum CLI (single-file Python)
-skill/    agent skill wrapper (SKILL.md + platform playbook)
-agents/   interface declaration for agent runtimes
-scripts/  daily smoke test against live platform links
-specs/    design notes
+```text
+SKILL.md           agent entrypoint
+scripts/vsum.py    initialization, checks, acquisition, frames, and validation
+references/        writing contract, configuration, and platform guidance
+agents/            agent UI metadata
+.env               local preferences, generated by initialization and untracked
+tests/             offline tests
 ```
 
 ## Limitations
 
 - Never bypasses logins, paywalls, DRM, or private content; Xiaohongshu usually needs browser cookies (`--cookies-from-browser`) or a local file.
-- Subtitle quality is whatever the platform provides; rolling auto-captions are de-overlapped but not re-punctuated unless the OpenAI cleanup runs.
-- Whisper fallback filters known Chinese hallucination phrases, but ASR output on noisy audio is best-effort.
-- Fails visibly when no transcript path succeeds — it will not silently return partial artifacts.
+- Transcript quality depends on the source captions or ASR; check important details against the video.
+- If video download fails, the command reports failure and preserves any transcript materials already obtained.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for changes and migration notes.
 
 ## License
 

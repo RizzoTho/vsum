@@ -1,5 +1,7 @@
 # Platform Playbook
 
+`VSUM_SCRIPT` denotes the absolute path to this skill’s `scripts/vsum.py`, resolved from the root SKILL.md. Keep the calling workspace as the working directory.
+
 Load this reference only after the default subtitle-first run needs a fallback or a non-default flag.
 
 ## Platform behavior
@@ -20,29 +22,28 @@ Both full URLs and `xhslink.com` short links route here. Public extraction may f
 
 ```bash
 # Existing transcript skips ASR
-vsum run "<url>" --intent "<purpose>" --transcript "<file>" --readable openai
+python3 "$VSUM_SCRIPT" run "<url>" --read "<purpose>" --transcript "<file>"
 
 # Local media, normally from Downie
-vsum run "<url>" --intent "<purpose>" --video-file "<video.mp4>"
+python3 "$VSUM_SCRIPT" run "<url>" --read "<purpose>" --video-file "<video.mp4>"
 
-# Explicitly approved CLI download
-vsum run "<url>" --intent "<purpose>" --download
+# Skip video download; metadata and subtitles still use the network
+python3 "$VSUM_SCRIPT" run "<url>" --no-download
 
 # Explicitly approved browser session access
-vsum run "<url>" --intent "<purpose>" --cookies-from-browser chrome
+python3 "$VSUM_SCRIPT" run "<url>" --read "<purpose>" --cookies-from-browser chrome
 ```
 
 ## Useful flags
 
+- `--read [PURPOSE]`: create a pending article task. Bare `--read` uses the default purpose; the article is written by the calling agent per [READABLE.md](READABLE.md), then closed with `python3 "$VSUM_SCRIPT" finalize`.
 - `--asr auto|whisper|none`: `auto` uses Whisper when installed.
 - `--whisper-model`: defaults to `small`; first use may download the model.
-- `--readable auto|openai|basic|agent|none`: `auto` uses OpenAI when credentials exist, otherwise basic cleanup. `openai` produces the blog-style structured article; `basic` merges paragraphs without restructuring; `agent` writes no readable file and delegates the article to the executing agent.
-- `--chunk-chars`: OpenAI cleanup chunk size, default `8000`.
-- `--overlap-chars`: keep at `0` for transcript rewriting to avoid repeated paragraphs.
+- `--no-download`: skip video download; metadata and subtitles may still use the network. Video download is otherwise on by default.
 - `--out-dir`: override the current workspace's `outputs/vsum/` root.
-- `--readable-out-dir`: override the default `wiki/Clippings/` readable owner.
-- `--tmp-dir`: where intermediate media lives while processing; defaults to the global system temp dir (`VSUM_TMP_DIR` env override).
-- `--keep-media`: keep intermediate media after the run instead of cleaning it.
+- `--readable-out-dir`: override the default `wiki/Clippings/` article target.
+- `--tmp-dir`: where intermediate media lives while processing; defaults to the global system temp dir (`VSUM_TMP_DIR` env override), one subdirectory per run.
+- `--keep-media`: keep intermediate media after finalize/run instead of cleaning it.
 - `--keep-raw-metadata`: debugging only; saves direct media URLs and other raw metadata.
 
-Use `--readable openai` for polished blog-style Chinese prose when credentials and model calls are acceptable. Use `--readable agent` to skip vsum's readable step and let the executing agent write the blog-style article from the raw transcript. Use `basic` when local cleanup matters more than polish, and `none` when only raw transcript is requested.
+The script prepares materials; article writing belongs to the executing agent.

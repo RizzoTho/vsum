@@ -5,7 +5,7 @@ Sources:
   - Bilibili popular API (stable official endpoint)
   - YouTube this-week-by-views search (Trending page was retired; this is the proxy)
 
-Cheap by design: --asr none (no Whisper), --readable basic (no OpenAI cost).
+Cheap by design: --asr none (no Whisper), --no-download (no media download).
 A link without platform subtitles counts as "no-subtitle", not a pipeline failure.
 
 Output: <project>/outputs/vsum/daily-test/YYYY-MM-DD/{report.md,report.json,<slug>/...}
@@ -23,7 +23,7 @@ import urllib.request
 from datetime import date
 from pathlib import Path
 
-# cron runs with a minimal PATH; make yt-dlp and vsum resolvable
+# cron runs with a minimal PATH; make yt-dlp resolvable
 os.environ["PATH"] = (
     str(Path.home() / ".local" / "bin") + ":/opt/homebrew/bin:" + os.environ.get("PATH", "")
 )
@@ -104,9 +104,8 @@ def run_vsum(item: dict, day_dir: Path) -> dict:
     try:
         result = subprocess.run(
             [
-                "vsum", "run", item["url"],
-                "--intent", "每日冒烟测试：验证平台字幕到可读转写链路",
-                "--asr", "none", "--readable", "basic",
+                sys.executable, str(PROJECT_ROOT / "scripts" / "vsum.py"), "run", item["url"],
+                "--no-download", "--asr", "none",
                 "--out-dir", str(case_dir), "--readable-out-dir", str(case_dir),
             ],
             capture_output=True, text=True, timeout=RUN_TIMEOUT, env=env,
@@ -119,11 +118,9 @@ def run_vsum(item: dict, day_dir: Path) -> dict:
     record["seconds"] = round(time.time() - start, 1)
 
     transcript = next(case_dir.rglob("transcript.txt"), None)
-    # readable output is OKF-named "<title>.md", not transcript-readable.md
-    readable = next((p for p in case_dir.rglob("*.md")), None)
+    # no --read in smoke mode: articles are the calling agent's job, not the CLI's
     packet = next(case_dir.rglob("packet.json"), None)
     record["transcript_bytes"] = transcript.stat().st_size if transcript else 0
-    record["readable"] = bool(readable and readable.stat().st_size)
     record["packet_valid"] = False
     if packet:
         try:
@@ -155,13 +152,13 @@ def write_report(day_dir: Path, records: list[dict], errors: list[str]) -> None:
         "",
         f"成功 {ok}/{len(records)}（no-subtitle / rate-limited 是平台侧信号，不算管线失败）",
         "",
-        "| status | source | seconds | transcript | readable | title |",
-        "|---|---|---|---|---|---|",
+        "| status | source | seconds | transcript | title |",
+        "|---|---|---|---|---|",
     ]
     for r in records:
         lines.append(
             f"| {r['status']} | {r['source']} | {r['seconds']} | "
-            f"{r['transcript_bytes']}B | {'y' if r['readable'] else 'n'} | {r['title'][:50]} |"
+            f"{r['transcript_bytes']}B | {r['title'][:50]} |"
         )
     for r in records:
         if r["status"] != "ok" and r.get("stderr_tail"):

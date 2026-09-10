@@ -1,0 +1,4 @@
+interface:
+  display_name: "vsum"
+  short_description: "Read videos as local transcripts and illustrated articles"
+  default_prompt: "Use $vsum to turn this video into a readable article with useful video frames."

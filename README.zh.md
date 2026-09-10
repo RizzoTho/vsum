@@ -2,70 +2,94 @@
 
 English: [README.md](README.md)
 
-给习惯从视频里学东西的人——B 站、YouTube、小红书——但更想读文字而不是拖进度条。从一个视频 URL 拿到一份干净可读的转写稿其实很麻烦：每个平台藏字幕的方式都不一样，ASR 在静默段会幻听，一半的工具还会悄悄下载你根本没要的视频文件。`vsum` 来自我自己的知识工作流：值得留下的产物是转写稿，不是视频文件。AI 不替你判断什么值得读，它只是让你更快拿到能读的文本。
+`vsum` 是一个把公开视频整理成本地转写稿或带配图文章的 agent skill，支持 B 站、YouTube 和小红书。优先使用平台字幕，没有字幕时可通过本地 Whisper 转写。
 
-`vsum` 把一个公开视频 URL 加一个阅读意图，变成本地转写产物：规范化的原始转写稿、可读的 Markdown 版本、机器可读的运行记录。管线是字幕优先——平台字幕不存在时才碰媒体文件，且只在你明确允许时才下载。
+给 agent 一个视频链接和阅读需求，它会获取材料、阅读转写稿、按需查看画面，再把文章和配图保存在本地。整个工作流由 [SKILL.md](SKILL.md) 定义，执行脚本和写作规范随 skill 一起安装。
 
-## 安装
+## 安装与初始化
 
-需要 Python 3.10+ 和 PATH 里的 [yt-dlp](https://github.com/yt-dlp/yt-dlp)。以下可选，装了就自动启用：
-
-- `ffmpeg` + `whisper` CLI——平台没有字幕时的本地 ASR 兜底
-- `OPENAI_API_KEY`——用 OpenAI API 做可读稿清理（没有则跑离线基础清理）
+把完整仓库安装到你的 agent 所使用的 skills 目录，并将文件夹命名为 `vsum`。例如，使用 `~/.agents/skills/` 管理 skills 时：
 
 ```bash
-git clone <this-repo> && cd vsum
-ln -s "$PWD/bin/vsum" ~/.local/bin/vsum   # 或把 bin/ 加进 PATH
+git clone https://github.com/RizzoTho/vsum.git ~/.agents/skills/vsum
 ```
+
+让 agent 加载安装目录里的 `SKILL.md`，然后告诉它：
+
+> 初始化 vsum，文章保存在当前项目的 wiki/Clippings 目录。
+
+Agent 会检查依赖和保存位置，调用初始化脚本，在 skill 安装目录生成本机 `.env`，再验证配置。已有配置不会被初始化覆盖。
+
+需要 Python 3.10+ 和 PATH 中的 [yt-dlp](https://github.com/yt-dlp/yt-dlp)。抽帧需要 `ffmpeg`；没有字幕而需要本地转写时，还需要 `whisper` CLI。Agent 会按任务需要处理缺失依赖。
 
 ## 使用
 
-```bash
-# 先探测公开元数据，不下载
-vsum probe "https://www.youtube.com/watch?v=..."
+在希望保存产物的项目中，向 agent 提出需求：
 
-# 生成转写产物；--intent 说明你想从视频里得到什么
-vsum run "https://www.bilibili.com/video/BV..." --intent "整理成可直接阅读的中文转写稿"
-```
+> 用 vsum 把这个视频整理成中文文章，重点解释演示流程和设计取舍：<视频链接>
 
-没有字幕时，可以提供自己的素材而不是下载：
+> 提取这个视频的字幕，保留原始转写稿即可：<视频链接>
 
-```bash
-vsum run "<url>" --intent "<目的>" --transcript notes.srt
-vsum run "<url>" --intent "<目的>" --video-file local.mp4
-vsum run "<url>" --intent "<目的>" --download          # 明确同意后才用 yt-dlp 下载
-```
+也可以提供本地视频或已有转写稿。视频默认下载用于抽帧；如果不希望下载视频，在请求中说明即可。元数据和字幕获取仍可能联网。
+
+## 产物
+
+| 文件 | 内容 |
+|---|---|
+| `transcript.txt` | 规范化转写稿，合并滚动字幕的重叠文本 |
+| `segments.json` | 字幕文本与时间轴，适用于 SRT/VTT 来源 |
+| `packet.json` | 来源信息、产物路径和成文任务状态 |
+| `<title>.md` | 完成 `--read` 工作流后，由 agent 撰写的文章 |
+
+配图保存在文章旁，由 packet 指定具体目录。纯文本转写稿不提供时间轴。
 
 ## 配置
 
-输出位置和模型都可以通过 CLI 参数或环境变量配置：
+长期偏好保存在安装目录的 `.env`，模板见 [.env.example](.env.example)。相对路径以当前任务项目为准；固定笔记库可使用绝对路径。
 
-| 设置项 | 参数 | 环境变量 | 默认值 |
-|---|---|---|---|
-| 原始产物（转写稿、packet、媒体） | `--out-dir` | `VSUM_OUT_ROOT` | `./outputs/vsum/` |
-| 可读版 Markdown 输出 | `--readable-out-dir` | `VSUM_READABLE_ROOT` | `<workspace>/wiki/Clippings/` |
-| 中间媒体临时目录 | `--tmp-dir` | `VSUM_TMP_DIR` | 系统临时目录，每次运行后清理 |
-| 本地 ASR 的 Whisper 模型 | `--whisper-model` | `VSUM_WHISPER_MODEL` | `small` |
-| 可读稿清理模型 | `--readable-model` | `VSUM_READABLE_MODEL` | `gpt-4.1-mini` |
+| 设置 | 默认值 |
+|---|---|
+| `VSUM_OUT_ROOT`：转写稿和运行记录 | `outputs/vsum` |
+| `VSUM_READABLE_ROOT`：文章目录 | `wiki/Clippings` |
+| `VSUM_TMP_DIR`：临时媒体目录 | 系统临时目录下的 `vsum` |
+| `VSUM_WHISPER_MODEL`：本地转写模型 | `small` |
 
-可读版是博客样式的结构化文章，默认落在当前工作区的 `wiki/Clippings/`，符合「一个视频一条剪藏」的笔记库习惯。想换别的笔记库，把 `VSUM_READABLE_ROOT` 指过去一次即可。`--readable agent` 不写可读文件，把整理步骤交给执行 skill 的 agent 自己完成，适合想要 agent 亲自写而不是调 API 的场景。中间媒体（下载的视频、提取的音频、ASR 输出）写进全局临时目录，每次运行后自动清理，工作区不会堆积大文件；`--keep-media` 可保留中间文件用于调试。
+单次参数优先于环境变量，环境变量优先于 `.env`，未配置时采用默认值。临时媒体在成文任务完成后清理；仅收集材料时在运行结束后清理。需要保留可让 agent 使用 `--keep-media`。用户提供的源视频会保留。
+
+具体格式、修改方式和依赖检查见 [配置说明](references/configuration.md)。
+
+## 直接运行脚本
+
+需要手动操作或排查问题时，从任务项目目录调用安装的脚本：
+
+```bash
+python3 "<skill-dir>/scripts/vsum.py" doctor
+python3 "<skill-dir>/scripts/vsum.py" run "<url>" --read
+python3 "<skill-dir>/scripts/vsum.py" run --help
+```
+
+`--read` 准备成文任务，文章由 agent 撰写并提交验收。完整工作流见 [SKILL.md](SKILL.md)，平台处理方式见 [platform playbook](references/platform-playbook.md)。
 
 ## 目录结构
 
-```
-bin/      vsum CLI（单文件 Python）
-skill/    agent skill 封装（SKILL.md + 平台 playbook）
-agents/   面向 agent runtime 的接口声明
-scripts/  针对真实平台链接的每日冒烟测试
-specs/    设计笔记
+```text
+SKILL.md           agent 入口
+scripts/vsum.py    初始化、依赖检查、材料获取、抽帧与验收
+references/        写作规范、配置说明与平台处理方式
+agents/            agent 界面元数据
+.env               本机配置，由初始化生成，不入库
+tests/             离线测试
 ```
 
 ## 限制
 
 - 不绕过登录、付费墙、DRM 或私有内容；小红书通常需要浏览器 cookies（`--cookies-from-browser`）或本地文件。
-- 字幕质量取决于平台本身；滚动式自动字幕会做去重叠处理，但只有走 OpenAI 清理时才会重新断句。
-- Whisper 兜底会过滤已知的中文幻听短语，但嘈杂音频上的 ASR 结果只能尽力而为。
-- 所有转写路径都失败时会明确报错——不会静默返回残缺产物。
+- 转写质量取决于原字幕或 ASR，重要细节需要对照视频核实。
+- 视频下载失败时，命令会明确报错，并保留已取得的转写材料。
+
+## 更新记录
+
+改动详情与参数迁移说明见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## License
 
