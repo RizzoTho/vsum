@@ -89,7 +89,7 @@ tests/             离线测试
 
 ## 更新记录
 
-改动详情与参数迁移说明见 [CHANGELOG.md](CHANGELOG.md)。
+功能更新与设计理念见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## License
 

@@ -89,7 +89,7 @@ tests/             offline tests
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for changes and migration notes.
+See [CHANGELOG.md](CHANGELOG.md) for feature updates and the ideas behind them.
 
 ## License
 
