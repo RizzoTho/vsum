@@ -12,7 +12,7 @@ __pycache__/
 .DS_Store
 
 # Local specifications and installation configuration
-/SPEC/
+/specs/
 /.env
 .venv/
 .pytest_cache/

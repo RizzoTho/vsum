@@ -11,7 +11,7 @@ Changes and migration notes.
 - Added agent-guided initialization: `init` creates installation-local `.env` preferences without overwriting existing configuration; `doctor` reports local dependencies, required resources, effective settings, and their sources without network access. Dependency installation remains agent-guided.
 - Configuration precedence is explicit run arguments, process environment, installation `.env`, then defaults. Relative paths resolve from the calling workspace; the script does not load unrelated workspace `.env` files or execute shell expressions.
 - Replaced the custom `agents/interface.yaml` declaration with `agents/openai.yaml` UI metadata. Updated runtime callers, tests, and skill references to use the bundled script.
-- Added `/SPEC/` and local `.env` to Git ignore rules, along with Python environment and test-cache directories. Existing tracked `specs/` history is retained.
+- Added `/specs/` and local `.env` to Git ignore rules, along with Python environment and test-cache directories. Design specifications are kept locally and removed from Git tracking.
 - README files now introduce skill installation, initialization, and natural-language requests before direct script usage.
 
 ### Changed
